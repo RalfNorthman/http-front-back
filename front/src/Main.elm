@@ -4,6 +4,34 @@ import Html exposing (Html)
 import Http exposing (..)
 import Element exposing (..)
 import Element.Input as Input
+import Json.Encode as Encode
+import Json.Decode as Decode
+import Json.Decode.Pipeline as DecodePipe
+
+
+---- JSON ----
+
+
+type alias Payload =
+    { someText : String
+    , someNumber : Int
+    }
+
+
+decodePayload : Decode.Decoder Payload
+decodePayload =
+    DecodePipe.decode Payload
+        |> DecodePipe.required "someText" (Decode.string)
+        |> DecodePipe.required "someNumber" (Decode.int)
+
+
+encodePayload : Payload -> Encode.Value
+encodePayload record =
+    Encode.object
+        [ ( "someText", Encode.string <| record.someText )
+        , ( "someNumber", Encode.int <| record.someNumber )
+        ]
+
 
 
 ---- MODEL ----
@@ -26,27 +54,18 @@ init =
 
 type Msg
     = NewText String
-    | Return (Result Http.Error String)
-
-
-myGetString url =
-    request
-        { method = "GET"
-        , headers = []
-        , url = url
-        , body = emptyBody
-        , expect = expectString
-        , timeout = Nothing
-        , withCredentials = False
-        }
+    | Return (Result Http.Error Payload)
 
 
 sendString txt =
     let
         url =
-            "http://elm.spectrogon.com:8080/" ++ txt
+            "http://elm.spectrogon.com:8081/"
+
+        body =
+            jsonBody <| encodePayload <| Payload txt 1
     in
-        send Return <| myGetString url
+        send Return <| post url body decodePayload
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -55,8 +74,8 @@ update msg model =
         NewText aString ->
             ( { model | boxText = aString }, sendString aString )
 
-        Return (Ok aString) ->
-            { model | outputText = aString } ! []
+        Return (Ok payload) ->
+            { model | outputText = payload.someText } ! []
 
         Return (Err message) ->
             { model | outputText = toString message } ! []
@@ -69,7 +88,7 @@ update msg model =
 view : Model -> Html Msg
 view model =
     layout [] <|
-        column []
+        column [ spacing 5 ]
             [ Input.text []
                 { onChange = Just (\x -> NewText x)
                 , text = model.boxText
@@ -78,7 +97,7 @@ view model =
                     Input.labelLeft [ moveDown 10 ] <|
                         text "Skriv något:"
                 }
-            , text model.outputText
+            , el [ moveRight 121 ] <| text model.outputText
             ]
 
 
